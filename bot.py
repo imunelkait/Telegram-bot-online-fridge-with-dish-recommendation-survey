@@ -20,6 +20,7 @@
     python bot.py
 """
 
+import asyncio
 import logging
 import os
 import sqlite3
@@ -473,12 +474,15 @@ async def on_survey(message: Message):
     )
 
 
-def main():
+async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
-    dp.start_polling(bot)
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        print("Бот остановлен")
