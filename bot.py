@@ -27,6 +27,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from aiogram import Bot, Dispatcher, F, Router
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command, CommandStart
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 
@@ -474,8 +475,44 @@ async def on_survey(message: Message):
     )
 
 
+def _make_session():
+    """Сессия aiogram с поддержкой прокси.
+
+    Если в окружении задан PROXY_URL (например
+    socks5://user:pass@host:1080 или http://host:port), бот пойдёт через прокси.
+    Для http/https-прокси дополнительно подставляется aiohttp TrustEnv,
+    чтобы учитывались стандартные переменные HTTPS_PROXY.
+    """
+    proxy_url = os.getenv("PROXY_URL")
+    kwargs = {}
+    if proxy_url:
+        kwargs["proxy"] = proxy_url
+        if proxy_url.startswith(("http://", "https://")):
+            import aiohttp
+            kwargs["trust_env"] = True
+    return AiohttpSession(**kwargs)
+
+
 async def main():
-    bot = Bot(token=BOT_TOKEN)
+    # get_me() с понятной подсказкой, если Telegram недоступен
+    bot = Bot(token=BOT_TOKEN, session=_make_session())
+    try:
+        me = await bot.get_me()
+    except Exception as e:
+        await bot.session.close()  # чтобы не осталось "Unclosed client session"
+        print(f"Не удалось подключиться к Telegram API: {e}")
+        print(
+            "\nЧастые причины:\n"
+            "  1) api.telegram.org заблокирован провайдером (в РФ бывает)\n"
+            "     -> поставьте прокси для Telegram и запустите так:\n"
+            "        export PROXY_URL=\"socks5://хост:порт\"   (Linux/macOS)\n"
+            "        set PROXY_URL=socks5://хост:порт        (Windows cmd)\n"
+            "  2) нет интернета / режет антивирус или файрвол\n"
+            "  3) неверный токен (обычно даёт 401 Unauthorized)\n"
+        )
+        raise SystemExit(1)
+    print(f"Бот @{me.username} запущен и работает... (Ctrl+C — остановить)")
+
     dp = Dispatcher()
     dp.include_router(router)
     await dp.start_polling(bot)
